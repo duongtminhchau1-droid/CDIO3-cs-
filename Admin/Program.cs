@@ -23,6 +23,8 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<SalaryService>();
 builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<LeaveRequestService>();
+
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("123456"));
 
 // =========================

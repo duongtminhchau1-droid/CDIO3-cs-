@@ -1,0 +1,122 @@
+﻿using Admin.Data;
+using Admin.Models;
+using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+
+namespace Admin.Services
+{
+    public class LeaveRequestService
+    {
+        private readonly AppDbContext _db;
+
+        public LeaveRequestService(AppDbContext db)
+        {
+            _db = db;
+        }
+
+        // =========================
+        // GET ALL
+        // =========================
+        public List<LeaveRequest> GetAll(string? status)
+        {
+            var query = _db.Set<LeaveRequest>().AsNoTracking();
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(l => l.Status == status);
+
+            return query.OrderByDescending(l => l.CreatedAt).ToList();
+        }
+
+        // =========================
+        // CREATE
+        // =========================
+        public LeaveRequest Create(LeaveRequestCreateDto dto)
+        {
+            // ✅ hỗ trợ cả ISO và VN
+            var formats = new[] { "yyyy-MM-dd", "dd/MM/yyyy" };
+
+            if (!DateTime.TryParseExact(
+                    dto.StartDate,
+                    formats,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var start))
+            {
+                throw new Exception("StartDate không đúng định dạng");
+            }
+
+            if (!DateTime.TryParseExact(
+                    dto.EndDate,
+                    formats,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var end))
+            {
+                throw new Exception("EndDate không đúng định dạng");
+            }
+
+            var leave = new LeaveRequest
+            {
+                EmployeeId = dto.EmployeeId,
+                LeaveTypeId = dto.LeaveTypeId,
+                StartDate = start,
+                EndDate = end,
+                TotalDays = (end.Date - start.Date).Days + 1,
+                Reason = dto.Reason,
+                Status = "Chờ duyệt",
+                CreatedAt = DateTime.Now
+            };
+
+            _db.Add(leave);
+            _db.SaveChanges();
+            return leave;
+        }
+
+        // =========================
+        // APPROVE
+        // =========================
+        public bool Approve(int id)
+        {
+            var leave = _db.Set<LeaveRequest>().Find(id);
+            if (leave == null) return false;
+
+            leave.Status = "Đã duyệt";
+            _db.SaveChanges();
+            return true;
+        }
+
+        // =========================
+        // REJECT
+        // =========================
+        public bool Reject(int id)
+        {
+            var leave = _db.Set<LeaveRequest>().Find(id);
+            if (leave == null) return false;
+
+            leave.Status = "Từ chối";
+            _db.SaveChanges();
+            return true;
+        }
+
+        // =========================
+        // DASHBOARD
+        // =========================
+        public object Dashboard()
+        {
+            var today = DateTime.Today;
+
+            return new
+            {
+                pending = _db.Set<LeaveRequest>().Count(l => l.Status == "Chờ duyệt"),
+                approved = _db.Set<LeaveRequest>().Count(l => l.Status == "Đã duyệt"),
+                rejected = _db.Set<LeaveRequest>().Count(l => l.Status == "Từ chối"),
+                onLeaveToday = _db.Set<LeaveRequest>()
+                    .Count(l =>
+                        l.Status == "Đã duyệt"
+                        && l.StartDate.Date <= today
+                        && l.EndDate.Date >= today
+                    )
+            };
+        }
+    }
+}

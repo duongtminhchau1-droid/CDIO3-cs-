@@ -18,32 +18,39 @@ namespace Admin.Services
             _db = db;
             _config = config;
         }
+
         // LOGIN (BY EMAIL)
         public string Login(string email, string password)
         {
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
                 throw new Exception("Thiếu email hoặc mật khẩu");
 
-            // LOGIN BẰNG BẢNG employees
+            // ⚠️ SELECT CỤ THỂ – KHÔNG LẤY FullName
             var emp = _db.Employees
                 .AsNoTracking()
-                .FirstOrDefault(e => e.Email == email);
+                .Where(e => e.Email == email)
+                .Select(e => new Employee
+                {
+                    Id = e.Id,
+                    Email = e.Email,
+                    Password = e.Password,
+                    Role = e.Role
+                })
+                .FirstOrDefault();
 
-            
             if (emp == null)
                 throw new Exception("Tài khoản không tồn tại");
 
             if (string.IsNullOrWhiteSpace(emp.Password))
                 throw new Exception("Tài khoản chưa có mật khẩu hợp lệ");
 
-            // SO SÁNH BCRYPT
             if (!BCrypt.Net.BCrypt.Verify(password, emp.Password))
                 throw new Exception("Mật khẩu không đúng");
-            
+
             return GenerateJwtToken(emp);
         }
 
-        // RESET PASSWORD (DEMO)
+        // RESET PASSWORD
         public void ResetPasswordByEmail(string email)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -56,6 +63,7 @@ namespace Admin.Services
             emp.Password = BCrypt.Net.BCrypt.HashPassword("123456");
             _db.SaveChanges();
         }
+
         // JWT TOKEN
         private string GenerateJwtToken(Employee emp)
         {
@@ -80,7 +88,7 @@ namespace Admin.Services
 
             var token = new JwtSecurityToken(
                 issuer: jwtIssuer,
-                audience: null,
+                audience: jwtIssuer,
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(3),
                 signingCredentials: creds
