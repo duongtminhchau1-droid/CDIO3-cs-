@@ -3,12 +3,14 @@ using Admin.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-
 using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// =========================
 // DATABASE
+// =========================
 var connectionString = builder.Configuration.GetConnectionString("MySql");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -18,7 +20,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         ServerVersion.AutoDetect(connectionString)
     );
 });
+
+// =========================
 // SERVICES
+// =========================
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmployeeService>();
@@ -27,6 +32,7 @@ builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<LeaveRequestService>();
 
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("123456"));
+
 // =========================
 // CORS
 // =========================
@@ -35,11 +41,12 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://localhost:3000") // frontend NextJS
+            policy.WithOrigins("http://localhost:3000")
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         });
 });
+
 // =========================
 // JWT AUTHENTICATION
 // =========================
@@ -49,7 +56,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
-        ValidateAudience = false, // ✅ TẮT để tránh lỗi
+        ValidateAudience = false,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
 
@@ -86,7 +93,6 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    // 🔐 JWT AUTH FOR SWAGGER
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -118,16 +124,29 @@ var app = builder.Build();
 // =========================
 // MIDDLEWARE
 // =========================
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+
+// Swagger chạy cả production
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
+
 app.UseCors("AllowFrontend");
-app.UseAuthentication(); // ⚠ PHẢI TRƯỚC Authorization
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// =========================
+// ROOT ENDPOINT (để Railway test)
+// =========================
+app.MapGet("/", () => "HRM API is running 🚀");
+
+// =========================
+// PORT cho Railway
+// =========================
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://0.0.0.0:{port}");
+
 app.Run();
