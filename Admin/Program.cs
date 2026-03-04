@@ -19,6 +19,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     );
 });
 // SERVICES
+
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<SalaryService>();
@@ -26,7 +27,19 @@ builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<LeaveRequestService>();
 
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("123456"));
-
+// =========================
+// CORS
+// =========================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:3000") // frontend NextJS
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 // =========================
 // JWT AUTHENTICATION
 // =========================
@@ -112,7 +125,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("AllowFrontend");
 app.UseAuthentication(); // ⚠ PHẢI TRƯỚC Authorization
 app.UseAuthorization();
 
