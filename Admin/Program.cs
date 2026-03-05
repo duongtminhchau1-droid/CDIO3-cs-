@@ -1,6 +1,7 @@
 ﻿using Admin.Data;
 using Admin.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -10,41 +11,45 @@ var builder = WebApplication.CreateBuilder(args);
 
 // =========================
 // DATABASE
+// Ưu tiên env var "ConnectionStrings__DefaultConnection" (Railway Variables)
+// fallback: appsettings.json
 // =========================
-var connectionString = builder.Configuration.GetConnectionString("MySql");
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? builder.Configuration.GetConnectionString("MySql"); // fallback nếu bạn lỡ đặt tên MySql
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new Exception("Missing connection string. Set ConnectionStrings:DefaultConnection (or MySql).");
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseMySql(
-        connectionString,
-        ServerVersion.AutoDetect(connectionString)
-    );
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
 // =========================
 // SERVICES
 // =========================
-
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<SalaryService>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<LeaveRequestService>();
 
-Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("123456"));
-
 // =========================
-// CORS
+// CORS (FE gọi API bằng Bearer token => KHÔNG cần credentials)
 // =========================
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:3000")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        });
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(_ => true) // cho phép mọi origin (dễ chạy dev + test IP LAN)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+        // KHÔNG .AllowCredentials() vì bạn đang dùng Bearer token
+    });
 });
 
 // =========================
@@ -61,7 +66,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         ValidateIssuerSigningKey = true,
 
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
-
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
         ),
@@ -70,28 +74,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     };
 });
 
-// =========================
-// AUTHORIZATION
-// =========================
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole("Admin"));
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 });
 
 // =========================
 // CONTROLLERS + SWAGGER
 // =========================
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "HRM Admin API",
-        Version = "v1"
-    });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "HRM Admin API", Version = "v1" });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -108,11 +103,7 @@ builder.Services.AddSwaggerGen(options =>
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
             },
             new string[] {}
         }
@@ -122,31 +113,30 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // =========================
-// MIDDLEWARE
+// IMPORTANT for Railway / reverse proxy
 // =========================
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 // Swagger chạy cả production
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
-
 app.UseCors("AllowFrontend");
+
+// Railway thường chạy HTTP internal, HTTPS do edge terminate => tránh redirect loop
+// Nếu bạn muốn bật HTTPS local thì để app.Environment.IsDevelopment()
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-// =========================
-// ROOT ENDPOINT (để Railway test)
-// =========================
 app.MapGet("/", () => "HRM API is running 🚀");
-
-// =========================
-// PORT cho Railway
-// =========================
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
