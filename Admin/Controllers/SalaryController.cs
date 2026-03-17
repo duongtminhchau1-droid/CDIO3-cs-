@@ -16,21 +16,18 @@ namespace Admin.Controllers
             _service = service;
         }
 
-        // DASHBOARD
         [HttpGet("dashboard")]
         public IActionResult Dashboard(int month, int year)
         {
             return Ok(_service.Dashboard(month, year));
         }
 
-        // LIST
         [HttpGet]
         public IActionResult GetAll(int month, int year, string? status)
         {
             return Ok(_service.GetAll(month, year, status));
         }
 
-        // TÍNH LƯƠNG
         [HttpPost("calculate")]
         public IActionResult Calculate(int month, int year)
         {
@@ -38,7 +35,6 @@ namespace Admin.Controllers
             return Ok(new { message = $"Đã tính lương cho {count} nhân viên" });
         }
 
-        // DUYỆT
         [HttpPost("{id}/approve")]
         public IActionResult Approve(int id)
         {
@@ -48,7 +44,6 @@ namespace Admin.Controllers
             return Ok("Đã duyệt");
         }
 
-        // THANH TOÁN
         [HttpPost("{id}/pay")]
         public IActionResult Pay(int id)
         {

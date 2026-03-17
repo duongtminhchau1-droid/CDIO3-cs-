@@ -20,7 +20,7 @@ namespace Admin.Data
         public DbSet<Position> Positions { get; set; }
 
         public DbSet<LeaveRequest> LeaveRequests { get; set; }
-
+        public DbSet<LeaveType> LeaveTypes { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

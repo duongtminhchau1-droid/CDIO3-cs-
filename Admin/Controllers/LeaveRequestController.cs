@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Admin.Controllers
 {
-    [Authorize]
     [ApiController]
     [Route("api/admin/leave-requests")]
+
     public class LeaveRequestController : ControllerBase
     {
         private readonly LeaveRequestService _service;

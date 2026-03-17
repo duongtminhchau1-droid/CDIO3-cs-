@@ -1,4 +1,5 @@
 ﻿using Admin.Data;
+using Admin.DTOs;
 using Admin.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,118 +7,143 @@ namespace Admin.Services
 {
     public class SalaryService
     {
-        private readonly AppDbContext _db;
-        private int created;
+        private readonly AppDbContext _context;
 
-        public SalaryService(AppDbContext db)
+        public SalaryService(AppDbContext context)
         {
-            _db = db;
+            _context = context;
         }
 
         // =========================
-        // DASHBOARD (CHO FE)
+        // DASHBOARD
         // =========================
         public object Dashboard(int month, int year)
         {
-            var q = _db.Payrolls
-                .Where(p => p.Month == month && p.Year == year);
+            var list = _context.Payrolls
+                .Where(x => x.Month == month && x.Year == year)
+                .ToList();
 
             return new
             {
-                totalNet = q.Sum(x => x.TotalSalary),
-                avgNet = q.Any() ? q.Average(x => x.TotalSalary) : 0,
-                pending = q.Count(x => x.Status != "Đã thanh toán"),
-                count = q.Count()
+                totalNet = list.Sum(x => x.TotalSalary),
+                avgNet = list.Count > 0 ? list.Average(x => x.TotalSalary) : 0,
+                totalBonus = list.Sum(x => x.Bonus),
+                pending = list.Count(x => x.Status != "Đã thanh toán"),
+                count = list.Count
             };
         }
 
         // =========================
-        // GET LIST + FILTER
+        // GET ALL SALARY
         // =========================
-        public List<Payroll> GetAll(int month, int year, string? status)
+        public List<SalaryRowDto> GetAll(int month, int year, string? status)
         {
-            var q = _db.Payrolls
-                .AsNoTracking()
-                .Where(p => p.Month == month && p.Year == year);
+            var query =
+                from p in _context.Payrolls
+                join e in _context.Employees on p.EmployeeId equals e.Id
+                join d in _context.Departments on e.DepartmentId equals d.Id
+                join pos in _context.Positions on e.PositionId equals pos.Id
+                where p.Month == month && p.Year == year
+                select new SalaryRowDto
+                {
+                    Id = p.Id,
 
-            if (!string.IsNullOrEmpty(status) && status != "Tất cả")
-                q = q.Where(p => p.Status == status);
+                    EmployeeId = e.Id,
+                    EmployeeCode = "NV" + e.Id.ToString("D3"),
+                    EmployeeName = e.FullName,
 
-            return q.ToList();
+                    Department = d.Name,
+                    Position = pos.Title,
+
+                    SalaryBase = p.SalaryBase,
+                    Bonus = p.Bonus,
+
+                    TotalIncome = p.TotalSalary,
+                    NetPay = p.TotalSalary - p.Deductions,
+
+                    Status = p.Status
+                };
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(x => x.Status == status);
+            }
+
+            return query.ToList();
         }
 
         // =========================
-        // TÍNH LƯƠNG THÁNG
+        // CALCULATE SALARY
         // =========================
         public int CalculateMonthly(int month, int year)
         {
-            var employees = _db.Employees
-                .AsNoTracking()
-                .Select(e => new { e.Id }) // chỉ lấy Id
-                .ToList();
-
+            var employees = _context.Employees.ToList();
+            int count = 0;
 
             foreach (var e in employees)
             {
-                bool exists = _db.Payrolls.Any(p =>
-                    p.EmployeeId == e.Id &&
-                    p.Month == month &&
-                    p.Year == year);
+                var exists = _context.Payrolls
+                    .FirstOrDefault(x =>
+                        x.EmployeeId == e.Id &&
+                        x.Month == month &&
+                        x.Year == year);
 
-                if (exists) continue;
+                if (exists != null) continue;
 
-                // 🔥 CHUẨN HRM:
-                // Employee KHÔNG lưu lương
-                // Payroll lưu snapshot lương theo tháng
-                decimal salaryBase = 0;
-                decimal bonus = 0;
-                decimal deductions = 0;
-
-                var payroll = new Payroll
+                var salary = new Payroll
                 {
                     EmployeeId = e.Id,
                     Month = month,
                     Year = year,
-                    SalaryBase = salaryBase,
-                    Bonus = bonus,
-                    Deductions = deductions,
-                    TotalSalary = salaryBase + bonus - deductions,
-                    Status = "Chờ duyệt"
+                    SalaryBase = (decimal)e.SalaryBase,
+                    Bonus = 0,
+                    Deductions = 0,
+                    TotalSalary = (decimal)e.SalaryBase,
+                    Status = "Chưa tính"
                 };
 
-                _db.Payrolls.Add(payroll);
-                created++;
+                _context.Payrolls.Add(salary);
+                count++;
             }
 
-            _db.SaveChanges();
-            return created;
+            _context.SaveChanges();
+            return count;
         }
 
         // =========================
-        // DUYỆT
+        // APPROVE
         // =========================
         public bool Approve(int id)
         {
-            var p = _db.Payrolls.Find(id);
-            if (p == null || p.Status != "Chờ duyệt") return false;
+            var salary = _context.Payrolls.FirstOrDefault(x => x.Id == id);
 
-            p.Status = "Chờ thanh toán";
-            _db.SaveChanges();
+            if (salary == null) return false;
+
+            if (salary.Status != "Chờ duyệt")
+                return false;
+
+            salary.Status = "Chờ thanh toán";
+
+            _context.SaveChanges();
             return true;
         }
 
         // =========================
-        // THANH TOÁN
+        // PAY
         // =========================
         public bool Pay(int id)
         {
-            var p = _db.Payrolls.Find(id);
-            if (p == null || p.Status != "Chờ thanh toán") return false;
+            var salary = _context.Payrolls.FirstOrDefault(x => x.Id == id);
 
-            p.Status = "Đã thanh toán";
-            _db.SaveChanges();
+            if (salary == null) return false;
+
+            if (salary.Status != "Chờ thanh toán")
+                return false;
+
+            salary.Status = "Đã thanh toán";
+
+            _context.SaveChanges();
             return true;
         }
     }
-
 }

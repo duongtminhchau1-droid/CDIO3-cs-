@@ -1,5 +1,6 @@
 ﻿using Admin.Data;
 using Admin.Models;
+using Admin.DTOs;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
@@ -17,14 +18,26 @@ namespace Admin.Services
         // =========================
         // GET ALL
         // =========================
-        public List<LeaveRequest> GetAll(string? status)
+        public List<LeaveRequestDto> GetAll(string? status)
         {
-            var query = _db.Set<LeaveRequest>().AsNoTracking();
+            var query =
+                from l in _db.LeaveRequests
+                join e in _db.Employees on l.EmployeeId equals e.Id
+                join t in _db.LeaveTypes on l.LeaveTypeId equals t.Id
+                select new LeaveRequestDto
+                {
+                    Id = l.Id,
+                    EmployeeId = e.Id,
+                    EmployeeName = e.FullName,
+                    LeaveType = t.Name,
+                    StartDate = l.StartDate,
+                    EndDate = l.EndDate,
+                    TotalDays = l.TotalDays,
+                    Reason = l.Reason,
+                    Status = l.Status
+                };
 
-            if (!string.IsNullOrEmpty(status))
-                query = query.Where(l => l.Status == status);
-
-            return query.OrderByDescending(l => l.CreatedAt).ToList();
+            return query.ToList();
         }
 
         // =========================
@@ -32,25 +45,24 @@ namespace Admin.Services
         // =========================
         public LeaveRequest Create(LeaveRequestCreateDto dto)
         {
-            // ✅ hỗ trợ cả ISO và VN
             var formats = new[] { "yyyy-MM-dd", "dd/MM/yyyy" };
 
             if (!DateTime.TryParseExact(
-                    dto.StartDate,
-                    formats,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var start))
+                dto.StartDate,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var start))
             {
                 throw new Exception("StartDate không đúng định dạng");
             }
 
             if (!DateTime.TryParseExact(
-                    dto.EndDate,
-                    formats,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out var end))
+                dto.EndDate,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var end))
             {
                 throw new Exception("EndDate không đúng định dạng");
             }
@@ -69,6 +81,7 @@ namespace Admin.Services
 
             _db.Add(leave);
             _db.SaveChanges();
+
             return leave;
         }
 
@@ -81,7 +94,9 @@ namespace Admin.Services
             if (leave == null) return false;
 
             leave.Status = "Đã duyệt";
+
             _db.SaveChanges();
+
             return true;
         }
 
@@ -94,7 +109,9 @@ namespace Admin.Services
             if (leave == null) return false;
 
             leave.Status = "Từ chối";
+
             _db.SaveChanges();
+
             return true;
         }
 

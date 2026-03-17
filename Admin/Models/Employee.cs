@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Admin.Models
 {
@@ -52,5 +53,6 @@ namespace Admin.Models
         // Navigation (để join lấy tên phòng ban/chức vụ)
         public Department? Department { get; set; }
         public Position? Position { get; set; }
+
     }
 }
