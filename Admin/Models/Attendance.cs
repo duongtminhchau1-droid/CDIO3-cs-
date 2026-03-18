@@ -3,11 +3,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Admin.Models
 {
-    [Table("attendances")]
+    [Table("attendance")]
     public class Attendance
     {
         [Key]
-        [Column("id")]
         public int Id { get; set; }
 
         [Column("employee_id")]
@@ -22,14 +21,25 @@ namespace Admin.Models
         [Column("check_out_time")]
         public DateTime? CheckOutTime { get; set; }
 
+        [Column("total_hours")]
+        public decimal TotalHours { get; set; }
+
         [Column("is_late")]
         public bool IsLate { get; set; }
 
         [Column("is_early_leave")]
         public bool IsEarlyLeave { get; set; }
 
-        // Working | Completed | Absent
+        [Column("note")]
+        public string Note { get; set; } = "";
+
         [Column("status")]
-        public string Status { get; set; } = "Working";
+        public string Status { get; set; } = "";
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
     }
 }

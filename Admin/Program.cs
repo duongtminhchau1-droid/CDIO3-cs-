@@ -11,12 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // =========================
 // DATABASE
-// Ưu tiên env var "ConnectionStrings__DefaultConnection" (Railway Variables)
-// fallback: appsettings.json
 // =========================
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? builder.Configuration.GetConnectionString("MySql"); // fallback nếu bạn lỡ đặt tên MySql
+    ?? builder.Configuration.GetConnectionString("MySql");
 
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -38,17 +36,20 @@ builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<LeaveRequestService>();
 
 // =========================
-// CORS (FE gọi API bằng Bearer token => KHÔNG cần credentials)
+// CORS
 // =========================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .SetIsOriginAllowed(_ => true) // cho phép mọi origin (dễ chạy dev + test IP LAN)
+            .WithOrigins(
+                "http://localhost:3000",
+                "https://chatbot-hrm-react-typescript.vercel.app",
+                "https://cdio3-cs-production.up.railway.app"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
-        // KHÔNG .AllowCredentials() vì bạn đang dùng Bearer token
     });
 });
 
@@ -56,23 +57,21 @@ builder.Services.AddCors(options =>
 // JWT AUTHENTICATION
 // =========================
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = false,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-        ),
-
-        ClockSkew = TimeSpan.Zero
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+            ),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 builder.Services.AddAuthorization(options =>
 {
@@ -86,7 +85,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "HRM Admin API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "HRM Admin API",
+        Version = "v1"
+    });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -103,9 +106,13 @@ builder.Services.AddSwaggerGen(options =>
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
             },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
@@ -113,25 +120,22 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // =========================
-// IMPORTANT for Railway / reverse proxy
+// PROXY / RAILWAY
 // =========================
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
-// Swagger chạy cả production
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseCors("AllowFrontend");
-
-// Railway thường chạy HTTP internal, HTTPS do edge terminate => tránh redirect loop
-// Nếu bạn muốn bật HTTPS local thì để app.Environment.IsDevelopment()
 if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

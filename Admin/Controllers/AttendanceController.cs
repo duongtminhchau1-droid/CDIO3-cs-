@@ -1,10 +1,8 @@
 ﻿using Admin.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Admin.Controllers
 {
-    [Authorize]
     [ApiController]
     [Route("api/admin/attendance")]
     public class AttendanceController : ControllerBase
@@ -20,7 +18,8 @@ namespace Admin.Controllers
         [HttpPost("checkin/{empId}")]
         public IActionResult CheckIn(int empId)
         {
-            return Ok(_service.CheckIn(empId));
+            var result = _service.CheckIn(empId);
+            return Ok(result);
         }
 
         // CHECK-OUT
@@ -28,31 +27,47 @@ namespace Admin.Controllers
         public IActionResult CheckOut(int empId)
         {
             var result = _service.CheckOut(empId);
+
             if (result == null)
                 return BadRequest("Chưa check-in hoặc đã check-out");
 
             return Ok(result);
         }
 
-        // DAILY LIST
+        // DAILY LIST - GIỮ PHẦN MỚI
         [HttpGet]
-        public IActionResult GetDaily([FromQuery] DateTime? date)
+        public IActionResult GetByDate([FromQuery] string? date)
         {
-            return Ok(_service.GetDaily(date));
+            if (string.IsNullOrWhiteSpace(date))
+                return BadRequest("Thiếu date");
+
+            if (!DateTime.TryParse(date, out var parsedDate))
+                return BadRequest("Date không hợp lệ");
+
+            var result = _service.GetByDate(parsedDate);
+            return Ok(result);
         }
 
-        // DASHBOARD SUMMARY
+        // SUMMARY - GIỮ PHẦN MỚI
         [HttpGet("summary")]
-        public IActionResult Summary([FromQuery] DateTime? date)
+        public IActionResult GetSummary([FromQuery] string? date)
         {
-            return Ok(_service.GetDailySummary(date));
+            if (string.IsNullOrWhiteSpace(date))
+                return BadRequest("Thiếu date");
+
+            if (!DateTime.TryParse(date, out var parsedDate))
+                return BadRequest("Date không hợp lệ");
+
+            var result = _service.GetSummary(parsedDate);
+            return Ok(result);
         }
 
-        // MONTHLY REPORT
+        // MONTHLY REPORT - GIỮ API CŨ
         [HttpGet("report")]
-        public IActionResult MonthlyReport(int year, int month)
+        public IActionResult MonthlyReport([FromQuery] int year, [FromQuery] int month)
         {
-            return Ok(_service.GetMonthlyReport(year, month));
+            var result = _service.GetMonthlyReport(year, month);
+            return Ok(result);
         }
     }
 }
